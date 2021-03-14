@@ -21,8 +21,7 @@ contract RockPaperScissor is Context
         uint256 won_game_count;
         uint256 lost_game_count;
         uint256 drawn_game_count;
-        string state; // playing, pending, 'idle'
-        // Game[] games;
+        string state;
     }
 
     struct Game {
