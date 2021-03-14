@@ -119,4 +119,56 @@ contract('RockPaperScissor', (accounts) => {
         assert.equal(player1.state, 'playing', 'player 1 state set to of playing');
         assert.equal(player2.state, 'playing', 'player 2 state set to of playing');
     })
+
+    it('can let player play an option', async () => {
+
+        const game = await rockPaperScissor.play('rock', {from: accounts[3]})
+        const player = await rockPaperScissor.get_player(accounts[3])
+
+        truffleAssert.eventEmitted(game, 'OnGamePlayed', (ev) => {
+            assert.equal(accounts[3], ev.player_1, 'player 1 address correct');
+            assert.equal(player.state, 'played', 'player 1 state changed to played');
+            return true;
+        }, 'Contract should return the correct message.');
+    })
+
+    it('can get current or last player game', async () => {
+
+        const game1 = await rockPaperScissor.get_game({from: accounts[3]});
+        const game2 = await rockPaperScissor.get_game({from: accounts[2]})
+
+        assert.equal(accounts[3], game1.player_1, '');
+        assert.equal(accounts[2], game2.player_2, '');
+
+        assert.equal(game1.player_2_option, '****', '');
+        assert.equal(game2.player_1_option, '****', '');
+    })
+
+    it('can let player 2 play an option', async () => {
+
+        const game = await rockPaperScissor.play('paper', {from: accounts[2]})
+        var player1 = await rockPaperScissor.get_player(accounts[3])
+        var player2 = await rockPaperScissor.get_player(accounts[2])
+
+        truffleAssert.eventEmitted(game, 'OnGameResult', (ev) => {
+            assert.equal(accounts[2], ev.loser, 'player 2 address is loser');
+            assert.equal(accounts[3], ev.winner, 'player 1 address is winner');
+            
+            assert.equal(player1.state, 'idle', 'player 2 state changed to idle');
+            assert.equal(player2.state, 'idle', 'player 2 state changed to idle');
+
+            assert.equal(player1.won_game_count, 1, 'player 1 win is added');
+            assert.equal(player1.lost_game_count, 0, 'player 1 didnt lose');
+
+            assert.equal(player2.won_game_count, 0, 'player 2 didnt win');
+            assert.equal(player2.lost_game_count, 1, 'player 2 loss is added');
+
+            return true;
+        }, 'Contract should return the correct message.');
+
+        const game_result_1 = await rockPaperScissor.get_game({from: accounts[3]});
+        const game_result_2 = await rockPaperScissor.get_game({from: accounts[3]});
+ 
+        assert.equal(game_result_1.state, game_result_2.state, '');
+    })
 })

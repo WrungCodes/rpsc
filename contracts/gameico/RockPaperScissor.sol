@@ -78,6 +78,18 @@ contract RockPaperScissor is Context
         return players[user_address];
     }
 
+    function get_game() public view returns (Game memory)
+    {
+        require(_game_exist(_msgSender()), 'no game exist');
+
+        Game memory game = games[_msgSender()];
+        if(!_compare_string(game.state, 'finished'))
+        {
+            _msgSender() == game.player_1 ? game.player_2_option = '****' : game.player_1_option = '****';
+        }
+        return game;
+    }
+
     function get_player_count() public view returns (uint256)
     {
         return _userIds.current();
@@ -96,26 +108,52 @@ contract RockPaperScissor is Context
 
     function play(string memory option) public
     {
-        require(!_player_exist(_msgSender()), 'player does not exist');
+        require(_player_exist(_msgSender()), 'player does not exist');
 
-        require(!_validate_options(option), 'invalid option given');
+        require(_validate_options(option), 'invalid option given');
 
-        require(!_game_exist(_msgSender()), 'no game exist');
+        require(_game_exist(_msgSender()), 'no game exist');
 
-        Game storage game_1 = games[_msgSender()];
-        Game storage game_2 = _msgSender() == game_1.player_1 ?
+        require(_player_is_playing(_msgSender()), 'player is not in a game');
+
+        address current_player_address = _msgSender();
+
+        Game storage game_1 = games[current_player_address];
+
+        address other_player_address = current_player_address == game_1.player_1 
+            ? game_1.player_2 : game_1.player_1;
+
+        Game storage game_2 = current_player_address == game_1.player_1 ?
             games[game_1.player_2] : games[game_1.player_1];
 
-        require(!_compare_string(_msgSender() == game_1.player_1 ? game_1.player_1_option : game_1.player_2_option, ''), 'you have already played');
+        require(_compare_string(current_player_address == game_1.player_1 ? game_1.player_1_option : game_1.player_2_option, ''), 'you have already played');
 
-        _msgSender() == game_1.player_1 ? game_1.player_1_option = option :  game_1.player_2_option = option;
-        _msgSender() == game_1.player_1 ? game_2.player_1_option = option :  game_2.player_2_option = option;
+        current_player_address == game_1.player_1 ? game_1.player_1_option = option :  game_1.player_2_option = option;
+        current_player_address == game_1.player_1 ? game_2.player_1_option = option :  game_2.player_2_option = option;
+
+        Player storage current_player = players[current_player_address];
+        current_player.state = 'played';
+
+        Player storage other_player = players[other_player_address];
 
         if(!_compare_string(game_1.player_1_option, '') && !_compare_string(game_1.player_2_option, ''))
         {
             // both players have played, evaluate the winner
+            Result memory result = Result(game_1.id, game_1.player_1, game_1.player_2);
 
-            emit OnGameResult(game_1.id, game_1.player_1, game_1.player_2, game_1.player_1_option, game_1.player_2_option);
+            game_1.state = 'finished';
+            game_2.state = 'finished';
+
+            current_player.state = 'idle';
+            other_player.state = 'idle';
+
+            Player storage winner = players[result.winner];
+            winner.won_game_count ++;
+
+            Player storage loser = players[result.loser];
+            loser.lost_game_count ++;
+
+            emit OnGameResult(game_1.id, result.winner, result.loser, game_1.player_1_option, game_1.player_2_option);
         }
         else
         {
@@ -239,6 +277,20 @@ contract RockPaperScissor is Context
     function _player_is_idle(address value) private view returns (bool)
     {
         if(_compare_string(players[value].state, 'idle'))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+    * check if the player state is equals to 'playing'
+    * returns true if player isn't playing
+    */
+    function _player_is_playing(address value) private view returns (bool)
+    {
+        if(_compare_string(players[value].state, 'playing'))
         {
             return true;
         }
