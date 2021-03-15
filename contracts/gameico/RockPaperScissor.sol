@@ -24,6 +24,12 @@ contract RockPaperScissor is Context
         string state;
     }
 
+    string constant player_played = "played";
+    string constant player_idle = "idle";
+    string constant player_playing = "playing";
+    string constant player_searching = "searching";
+    string constant player_none = "";
+
     struct Game {
         uint256 id;
         address player_1;
@@ -32,6 +38,19 @@ contract RockPaperScissor is Context
         string player_1_option;
         string player_2_option;
     }
+
+    string constant game_finished = "finished";
+    string constant game_playing = "playing";
+    string constant game_none = "";
+
+    mapping(address => GameHistory) private saved_games_history;
+
+    struct GameHistory {
+        Game[] games;
+        uint256 count;
+    }
+
+    string constant none = "";
 
     struct Result {
         uint256 game_id;
@@ -77,12 +96,19 @@ contract RockPaperScissor is Context
         return players[user_address];
     }
 
+    function get_player_history(address user_address) public view returns (GameHistory memory)
+    {
+        return saved_games_history[user_address];
+
+        // return (gh.games, gh.count);
+    }
+
     function get_game() public view returns (Game memory)
     {
         require(_game_exist(_msgSender()), 'no game exist');
 
         Game memory game = games[_msgSender()];
-        if(!_compare_string(game.state, 'finished'))
+        if(!_compare_string(game.state, game_finished))
         {
             _msgSender() == game.player_1 ? game.player_2_option = '****' : game.player_1_option = '****';
         }
@@ -125,32 +151,34 @@ contract RockPaperScissor is Context
         Game storage game_2 = current_player_address == game_1.player_1 ?
             games[game_1.player_2] : games[game_1.player_1];
 
-        require(_compare_string(current_player_address == game_1.player_1 ? game_1.player_1_option : game_1.player_2_option, ''), 'you have already played');
+        require(_compare_string(current_player_address == game_1.player_1 ? game_1.player_1_option : game_1.player_2_option, none), 'you have already played');
 
         current_player_address == game_1.player_1 ? game_1.player_1_option = option :  game_1.player_2_option = option;
         current_player_address == game_1.player_1 ? game_2.player_1_option = option :  game_2.player_2_option = option;
 
         Player storage current_player = players[current_player_address];
-        current_player.state = 'played';
+        current_player.state = player_played;
 
         Player storage other_player = players[other_player_address];
 
-        if(!_compare_string(game_1.player_1_option, '') && !_compare_string(game_1.player_2_option, ''))
+        if(!_compare_string(game_1.player_1_option, none) && !_compare_string(game_1.player_2_option, none))
         {
             // both players have played, evaluate the winner
             Result memory result = Result(game_1.id, game_1.player_1, game_1.player_2);
 
-            game_1.state = 'finished';
-            game_2.state = 'finished';
+            game_1.state = game_finished;
+            game_2.state = game_finished;
 
-            current_player.state = 'idle';
-            other_player.state = 'idle';
+            current_player.state = player_idle;
+            other_player.state = player_idle;
 
             Player storage winner = players[result.winner];
             winner.won_game_count ++;
 
             Player storage loser = players[result.loser];
             loser.lost_game_count ++;
+
+            _save_game_in_history(current_player_address, other_player_address, game_1, game_2);
 
             emit OnGameResult(game_1.id, result.winner, result.loser, game_1.player_1_option, game_1.player_2_option);
         }
@@ -170,7 +198,7 @@ contract RockPaperScissor is Context
     {
         require(!_player_exist(user_address), 'player already exists');
 
-        players[user_address] = Player(user_id, username, 0, 0, 0, 'idle');
+        players[user_address] = Player(user_id, username, 0, 0, 0, player_idle);
 
         emit OnPlayerCreated(user_address, user_id, username);
 
@@ -201,7 +229,7 @@ contract RockPaperScissor is Context
     */
     function _player_exist(address value) private view returns (bool)
     {
-        if(_compare_string(players[value].state, ''))
+        if(_compare_string(players[value].state, player_none))
         {
             return false;
         }
@@ -215,12 +243,29 @@ contract RockPaperScissor is Context
     */
     function _game_exist(address value) private view returns (bool)
     {
-        if(_compare_string(games[value].state, ''))
+        if(_compare_string(games[value].state, game_none))
         {
             return false;
         }
 
         return true;
+    }
+
+    // function _create_game_history(address user_address) private
+    // {
+    //     saved_games_history[user_address] = GameHistory(new Game[](50), 0);
+    // }
+
+    function _save_game_in_history(address first, address second, Game storage g1, Game storage g2) private
+    {
+        GameHistory storage gh1 = saved_games_history[first];
+        GameHistory storage gh2 = saved_games_history[second];
+
+        gh1.games.push(g1);
+        gh2.games.push(g2);
+
+        gh1.count++;
+        gh2.count++;
     }
 
     /**
@@ -229,16 +274,16 @@ contract RockPaperScissor is Context
     */
     function _add_players_to_game(address player1, address player2) private
     {
-        games[player1] = Game(_gameIds.current(), player1, player2, 'playing', '', '');
-        games[player2] = Game(_gameIds.current(), player1, player2, 'playing', '', '');
+        games[player1] = Game(_gameIds.current(), player1, player2, game_playing, none, none);
+        games[player2] = Game(_gameIds.current(), player1, player2, game_playing, none, none);
 
         Player storage player_1 = players[player1];
-        player_1.state = 'playing';
+        player_1.state = player_playing;
 
         Player storage player_2 = players[player2];
-        player_2.state = 'playing';
+        player_2.state = player_playing;
 
-        emit OnGameStarted(_gameIds.current(), player1, player2, 'playing');
+        emit OnGameStarted(_gameIds.current(), player1, player2, player_playing);
         _gameIds.increment();
     }
 
@@ -264,7 +309,7 @@ contract RockPaperScissor is Context
 
         Player storage player = players[value];
 
-        player.state = 'searching';
+        player.state = player_searching;
 
         emit OnEnterLobby(value);
     }
@@ -275,7 +320,7 @@ contract RockPaperScissor is Context
     */
     function _player_is_idle(address value) private view returns (bool)
     {
-        if(_compare_string(players[value].state, 'idle'))
+        if(_compare_string(players[value].state, player_idle))
         {
             return true;
         }
@@ -289,7 +334,7 @@ contract RockPaperScissor is Context
     */
     function _player_is_playing(address value) private view returns (bool)
     {
-        if(_compare_string(players[value].state, 'playing'))
+        if(_compare_string(players[value].state, player_playing))
         {
             return true;
         }
@@ -303,7 +348,7 @@ contract RockPaperScissor is Context
     */
     function _player_is_in_lobby(address value) private view returns (bool)
     {
-        if(_compare_string(players[value].state, 'searching'))
+        if(_compare_string(players[value].state, player_searching))
         {
             return true;
         }
