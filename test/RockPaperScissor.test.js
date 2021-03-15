@@ -146,7 +146,7 @@ contract('RockPaperScissor', (accounts) => {
 
     it('can let player 2 play an option', async () => {
 
-        const game = await rockPaperScissor.play('paper', {from: accounts[2]})
+        const game = await rockPaperScissor.play('scissor', {from: accounts[2]})
         var player1 = await rockPaperScissor.get_player(accounts[3])
         var player2 = await rockPaperScissor.get_player(accounts[2])
 
@@ -227,7 +227,7 @@ contract('RockPaperScissor', (accounts) => {
         const game = await rockPaperScissor.play('rock', {from: accounts[3]})
         const player = await rockPaperScissor.get_player(accounts[3])
 
-        truffleAssert.eventEmitted(game, 'OnGameResult', (ev) => {
+        truffleAssert.eventEmitted(game, 'OnGameDrawn', (ev) => {
             assert.equal(player.state, 'idle', 'player 1 state changed to played');
             return true;
         }, 'Contract should return the correct message.');
@@ -237,5 +237,14 @@ contract('RockPaperScissor', (accounts) => {
 
         const gh = await rockPaperScissor.get_player_history(accounts[3]);
         assert.equal(gh.count, 2, '');
+    })
+
+    it('can turn both players state to playing', async () => {
+
+        const player1 = await rockPaperScissor.get_player(accounts[3])
+        const player2 = await rockPaperScissor.get_player(accounts[2])
+
+        assert.equal(player1.state, 'idle', 'player 1 state set to of playing');
+        assert.equal(player2.state, 'idle', 'player 2 state set to of playing');
     })
 })

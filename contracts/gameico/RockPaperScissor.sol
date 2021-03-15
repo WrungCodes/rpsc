@@ -56,6 +56,7 @@ contract RockPaperScissor is Context
         uint256 game_id;
         address winner;
         address loser;
+        bool is_draw;
     }
 
     mapping(address => Player) public players;
@@ -73,6 +74,9 @@ contract RockPaperScissor is Context
     event OnGamePlayed(uint256 id, address player_1, address player_2);
 
     event OnGameResult(uint256 id, address winner, address loser, string player_1_option, string player_2_option);
+
+    event OnGameDrawn(uint256 id, address player1, address player2, string player_1_option, string player_2_option);
+
 
     constructor()
     {
@@ -164,7 +168,8 @@ contract RockPaperScissor is Context
         if(!_compare_string(game_1.player_1_option, none) && !_compare_string(game_1.player_2_option, none))
         {
             // both players have played, evaluate the winner
-            Result memory result = Result(game_1.id, game_1.player_1, game_1.player_2);
+
+            Result memory result = evaluate_winner(game_1);
 
             game_1.state = game_finished;
             game_2.state = game_finished;
@@ -172,20 +177,61 @@ contract RockPaperScissor is Context
             current_player.state = player_idle;
             other_player.state = player_idle;
 
-            Player storage winner = players[result.winner];
-            winner.won_game_count ++;
+            if(!result.is_draw)
+            {
+                Player storage winner = players[result.winner];
+                winner.won_game_count ++;
 
-            Player storage loser = players[result.loser];
-            loser.lost_game_count ++;
+                Player storage loser = players[result.loser];
+                loser.lost_game_count ++;
+
+                emit OnGameResult(game_1.id, result.winner, result.loser, game_1.player_1_option, game_1.player_2_option);
+            }
+
+            if(result.is_draw)
+            {
+                Player storage winner = players[result.winner];
+                winner.drawn_game_count ++;
+
+                Player storage loser = players[result.loser];
+                loser.drawn_game_count ++;
+
+                emit OnGameDrawn(game_1.id, result.winner, result.loser, game_1.player_1_option, game_1.player_2_option);
+            }
 
             _save_game_in_history(current_player_address, other_player_address, game_1, game_2);
-
-            emit OnGameResult(game_1.id, result.winner, result.loser, game_1.player_1_option, game_1.player_2_option);
         }
         else
         {
             emit OnGamePlayed(game_1.id, game_1.player_1, game_1.player_2);
         }
+    }
+
+    function evaluate_winner(Game memory game) private pure returns (Result memory)
+    {
+        if(_compare_string(game.player_1_option, game.player_2_option)) return Result(game.id, game.player_1, game.player_2, true);
+
+        if(evaluate_options(game.player_1_option, game.player_2_option))
+        {
+            return Result(game.id, game.player_1, game.player_2, false);
+        }
+        else
+        {
+            return Result(game.id, game.player_2, game.player_1, false);
+        }
+    }
+
+    function evaluate_options(string memory a, string memory b) private pure returns (bool)
+    {
+        if(_compare_string(a, 'rock') && _compare_string(b, 'scissor')) return true; 
+        if(_compare_string(a, 'scissor') && _compare_string(b, 'paper')) return true; 
+        if(_compare_string(a, 'paper') && _compare_string(b, 'rock')) return true; 
+
+        if(_compare_string(a, 'rock') && _compare_string(b, 'paper')) return false;
+        if(_compare_string(a, 'scissor') && _compare_string(b, 'rock')) return false;
+        if(_compare_string(a, 'paper') && _compare_string(b, 'scissor')) return false;
+
+        return true;
     }
 
    /**
