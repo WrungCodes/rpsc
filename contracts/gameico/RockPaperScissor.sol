@@ -6,11 +6,18 @@ pragma experimental ABIEncoderV2;
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
+import "../token/RPSCToken.sol";
 
 contract RockPaperScissor is Context
 {
     using Counters for Counters.Counter;
     using EnumerableSet for EnumerableSet.AddressSet;
+    using SafeMath for uint256;
+
+    RPSCToken public rpsctokenContract;
+    uint256 public tokenPerWin;
+
+    uint256 public tokenBalanceTracker;
 
     Counters.Counter private _userIds;
     Counters.Counter private _gameIds;
@@ -78,9 +85,16 @@ contract RockPaperScissor is Context
     event OnGameDrawn(uint256 id, address player1, address player2, string player_1_option, string player_2_option);
 
 
-    constructor()
+    constructor(RPSCToken _rpsctokenContract, uint256 _tokenPerWin)
     {
+        rpsctokenContract = _rpsctokenContract;
+        tokenPerWin = _tokenPerWin;
+        update_token_balance();
+    }
 
+    function update_token_balance() public
+    {
+        tokenBalanceTracker = rpsctokenContract.balanceOf(address(this));
     }
 
    /**
@@ -129,6 +143,8 @@ contract RockPaperScissor is Context
         require(_player_exist(_msgSender()), 'player does not exist');
 
         require(_player_is_idle(_msgSender()), 'player already in a game');
+
+        require(tokenBalanceTracker >= tokenPerWin, 'no more Rpsctoken');
 
         lobby.length() == 0 ? 
             _insert_player_into_lobby(_msgSender()) : // add player to game lobby
@@ -185,6 +201,8 @@ contract RockPaperScissor is Context
                 Player storage loser = players[result.loser];
                 loser.lost_game_count ++;
 
+                rpsctokenContract.transfer(result.winner, tokenPerWin);
+
                 emit OnGameResult(game_1.id, result.winner, result.loser, game_1.player_1_option, game_1.player_2_option);
             }
 
@@ -195,6 +213,8 @@ contract RockPaperScissor is Context
 
                 Player storage loser = players[result.loser];
                 loser.drawn_game_count ++;
+
+                tokenBalanceTracker = tokenBalanceTracker.add(tokenPerWin);
 
                 emit OnGameDrawn(game_1.id, result.winner, result.loser, game_1.player_1_option, game_1.player_2_option);
             }
@@ -320,6 +340,8 @@ contract RockPaperScissor is Context
     */
     function _add_players_to_game(address player1, address player2) private
     {
+        tokenBalanceTracker = tokenBalanceTracker.sub(tokenPerWin);
+
         games[player1] = Game(_gameIds.current(), player1, player2, game_playing, none, none);
         games[player2] = Game(_gameIds.current(), player1, player2, game_playing, none, none);
 
