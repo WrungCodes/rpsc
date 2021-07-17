@@ -1,4 +1,4 @@
-# rpsc
+# Rock Paper Scissors Coin RPSC
 
 A Multiplayer Rock Papaer Scissor (RPS Coin) Smart Contract Game built on the Etheruim Blockchain, where users can win the RSPCoin Token after each victory.
 
